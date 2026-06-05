@@ -1,0 +1,93 @@
+import { ArrowLeftRight, CreditCard, Building2, ExternalLink, Loader2 } from "lucide-react";
+import type { BridgeTransactionData } from "@/lib/stellar";
+import { getExplorerUrl } from "@/lib/stellar";
+
+const typeConfig: Record<string, { icon: typeof ArrowLeftRight; label: string; color: string }> = {
+  "g-to-c": { icon: ArrowLeftRight, label: "G → C Bridge", color: "text-[var(--primary-light)]" },
+  fiat: { icon: CreditCard, label: "Fiat Onramp", color: "text-[var(--secondary)]" },
+  cex: { icon: Building2, label: "CEX Withdrawal", color: "text-[var(--accent)]" },
+};
+
+const statusConfig: Record<string, { label: string; color: string }> = {
+  pending: { label: "Pending", color: "text-[var(--warning)]" },
+  confirmed: { label: "Confirmed", color: "text-[var(--success)]" },
+  failed: { label: "Failed", color: "text-[var(--error)]" },
+};
+
+interface Props {
+  transactions: BridgeTransactionData[];
+  loading: boolean;
+  network: "PUBLIC" | "TESTNET";
+}
+
+export default function TransactionHistory({ transactions, loading, network }: Props) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      <div className="p-5 border-b border-[var(--border)]">
+        <h3 className="font-semibold">Recent Transactions</h3>
+      </div>
+      {loading ? (
+        <div className="p-12 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-[var(--text-muted)]" />
+        </div>
+      ) : transactions.length === 0 ? (
+        <div className="p-12 text-center">
+          <p className="text-sm text-[var(--text-muted)]">No transactions found for this account.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-[var(--border)]">
+          {transactions.map((tx) => {
+            const type = typeConfig[tx.type] || typeConfig["g-to-c"];
+            const status = statusConfig[tx.status];
+            const Icon = type.icon;
+            return (
+              <div key={tx.id} className="p-4 hover:bg-[var(--surface-2)] transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-[var(--surface-2)] flex items-center justify-center flex-shrink-0">
+                      <Icon className={`w-4 h-4 ${type.color}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{type.label}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">
+                        {tx.amount} {tx.asset} → {tx.toAddress}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className={`text-xs font-medium ${status.color}`}>{status.label}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {new Date(tx.timestamp).toLocaleDateString()}
+                    </p>
+                    {tx.hash && (
+                      <a
+                        href={getExplorerUrl(network, "tx", tx.hash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-[var(--primary-light)] hover:underline inline-flex items-center gap-0.5"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        View
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="p-4 border-t border-[var(--border)]">
+        <a
+          href={`https://stellar.expert/explorer/${network === "PUBLIC" ? "public" : "testnet"}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--foreground)] transition-colors"
+        >
+          View all on Stellar Expert
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      </div>
+    </div>
+  );
+}
