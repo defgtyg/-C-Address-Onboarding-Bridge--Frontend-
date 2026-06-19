@@ -306,12 +306,18 @@ export async function buildAndSubmitPayment(
   const server = getHorizonServer(network);
   const passphrase = getNetworkPassphrase(network);
 
+  // Horizon account loading and transaction signing must use the same network
+  // passphrase; otherwise Freighter can sign an XDR that Horizon will reject.
+  // https://developers.stellar.org/docs/build/guides/transactions
   const account = await server.loadAccount(sourceAddress);
   let asset: Asset;
   if (assetCode === "XLM") {
     asset = Asset.native();
   } else {
     const balances = account.balances as HorizonBalance[];
+    // Issued Stellar assets are identified by both code and issuer. Reusing the
+    // issuer from the account balance prevents accidentally constructing a
+    // payment for a lookalike asset code from a different issuer.
     const matchingBalance = balances.find(
       (b) => b.asset_code === assetCode
     );
@@ -321,6 +327,10 @@ export async function buildAndSubmitPayment(
     asset = new Asset(assetCode, matchingBalance.asset_issuer);
   }
 
+  // Contract routing currently sends native XLM to the configured bridge
+  // contract. More advanced Soroban invocation parameters should be simulated
+  // through Soroban RPC before submission when the contract ABI is expanded.
+  // https://developers.stellar.org/docs/build/guides/conventions/invoking-contracts
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: passphrase,
@@ -335,6 +345,9 @@ export async function buildAndSubmitPayment(
     .setTimeout(30)
     .build();
 
+  // Freighter signs serialized XDR and returns signed XDR; the app never handles
+  // secret keys directly. See Freighter's signTransaction flow.
+  // https://docs.freighter.app/docs/guide/usingFreighterWebApp
   const signedResult = await signTransaction(tx.toXDR(), {
     networkPassphrase: passphrase,
   });
@@ -382,6 +395,8 @@ export async function bridgeViaContract(
   network: "PUBLIC" | "TESTNET"
 ): Promise<PaymentResult> {
   if (!BRIDGE_CONTRACT_ID) {
+    // Local/testnet deployments may not have a Soroban bridge contract yet, so
+    // falling back to a direct Stellar payment keeps the funding flow usable.
     return buildAndSubmitPayment(sourceAddress, cAddress, amount, assetCode, network);
   }
 
@@ -426,6 +441,9 @@ export async function bridgeViaContract(
   } catch (e: unknown) {
     const err = e as { response?: { data?: { extras?: { result_codes?: unknown } } } };
     if (err.response?.data?.extras?.result_codes) {
+      // Surface Stellar result codes because they are the fastest way to diagnose
+      // failures such as underfunded accounts, bad sequence numbers, or invalid
+      // destinations during bridge testing.
       throw new Error(
         `Transaction failed: ${JSON.stringify(err.response.data.extras.result_codes)}`
       );
