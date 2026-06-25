@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { connectWallet, checkConnection, getWalletAddress, getCurrentNetwork } from "@/lib/stellar";
-import { loadPreferences, savePreferences, clearAllUserData, addRecentAddress } from "@/lib/user-preferences";
-import { ensureRequiredCapabilities, revokeAllCapabilities, type CapabilityType } from "@/lib/freighter-capabilities";
+import { loadPreferences, clearAllUserData, addRecentAddress } from "@/lib/user-preferences";
+import { ensureRequiredCapabilities, revokeAllCapabilities } from "@/lib/freighter-capabilities";
 
 interface WalletContextType {
   address: string | null;

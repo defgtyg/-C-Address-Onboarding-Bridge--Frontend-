@@ -15,19 +15,19 @@ export function WalletPermissionsPanel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const loadCapabilities = async () => {
+      const granted = await getGrantedCapabilities();
+      setGrantedCapabilities(granted);
+      setLoading(false);
+    };
     loadCapabilities();
   }, []);
-
-  const loadCapabilities = async () => {
-    const granted = await getGrantedCapabilities();
-    setGrantedCapabilities(granted);
-    setLoading(false);
-  };
 
   const handleRevokeCapability = async (capability: CapabilityType) => {
     if (confirm(`Revoke "${FREIGHTER_CAPABILITIES[capability].description}" permission?`)) {
       await revokeCapability(capability);
-      await loadCapabilities();
+      const granted = await getGrantedCapabilities();
+      setGrantedCapabilities(granted);
     }
   };
 

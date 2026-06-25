@@ -1,29 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Check, AlertCircle, Loader, ArrowRight, ExternalLink } from "lucide-react";
+import { Check, AlertCircle, Loader, ArrowRight } from "lucide-react";
 import { useWallet } from "./wallet-provider";
 import {
   initiateChallengeTransaction,
   verifyChallengeReceived,
   getChallenge,
   clearChallenge,
-  getChallengeExplorerUrl,
   type VerificationChallenge,
 } from "@/lib/cex-verification";
 import { DEFAULT_BRIDGE_ADDRESS } from "@/lib/types";
 
 export interface CEXVerificationProps {
-  cAddress: string;
   onVerified: () => void;
 }
 
-export function CEXAddressVerification({ cAddress, onVerified }: CEXVerificationProps) {
+export function CEXAddressVerification({ onVerified }: CEXVerificationProps) {
   const { address, network } = useWallet();
   const [step, setStep] = useState<"idle" | "initiating" | "pending" | "verifying" | "verified" | "error">("idle");
   const [challenge, setChallenge] = useState<VerificationChallenge | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [transactionHash, setTransactionHash] = useState("");
 
   const handleInitiateChallenge = async () => {
     if (!address) {
@@ -93,7 +90,7 @@ export function CEXAddressVerification({ cAddress, onVerified }: CEXVerification
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
       <h3 className="font-semibold mb-4">Verify Bridge Address Access</h3>
       <p className="text-sm text-[var(--text-muted)] mb-6">
-        To protect your funds, we'll send a small test transaction (0.0001 XLM) to verify you control the bridge address.
+        To protect your funds, we&apos;ll send a small test transaction (0.0001 XLM) to verify you control the bridge address.
       </p>
 
       {step === "idle" && (
@@ -140,18 +137,6 @@ export function CEXAddressVerification({ cAddress, onVerified }: CEXVerification
             <Check className="w-4 h-4" />
             Verify Receipt
           </button>
-
-          {transactionHash && (
-            <a
-              href={getChallengeExplorerUrl(transactionHash, network)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 text-xs text-[var(--primary-light)] hover:text-[var(--primary)]"
-            >
-              View on explorer
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
         </div>
       )}
 

@@ -12,7 +12,6 @@ export default function CexPage() {
   const [selectedNetwork, setSelectedNetwork] = useState("Stellar");
   const [cAddress, setCAddress] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [isVerified, setIsVerified] = useState(false);
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -84,10 +83,7 @@ export default function CexPage() {
               <input
                 type="text"
                 value={cAddress}
-                onChange={(e) => {
-                  setCAddress(e.target.value);
-                  setIsVerified(false);
-                }}
+                onChange={(e) => setCAddress(e.target.value)}
                 placeholder="CABC...DEF"
                 className="w-full pl-10 pr-4 py-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm font-mono focus:outline-none focus:border-[var(--primary)] transition-colors"
               />
@@ -98,8 +94,7 @@ export default function CexPage() {
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
               <h3 className="font-semibold mb-4">4. Verify Bridge Address Access</h3>
               <CEXAddressVerification
-                cAddress={cAddress}
-                onVerified={() => setIsVerified(true)}
+                onVerified={() => {}}
               />
             </div>
           )}
