@@ -59,8 +59,6 @@ export function DataTable<T>({
     setExpandedRows(newExpanded);
   };
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-
   if (loading) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">

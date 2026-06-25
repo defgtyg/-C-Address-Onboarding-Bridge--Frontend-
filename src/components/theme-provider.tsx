@@ -11,36 +11,33 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const getInitialTheme = (): Theme => {
+  if (typeof window === "undefined") return "dark";
+
+  const storedTheme = localStorage.getItem("theme") as Theme | null;
+  if (storedTheme) return storedTheme;
+
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return prefersDark ? "dark" : "light";
+};
+
+const applyTheme = (newTheme: Theme) => {
+  const root = document.documentElement;
+  if (newTheme === "dark") {
+    root.classList.remove("light-theme");
+    root.classList.add("dark-theme");
+  } else {
+    root.classList.add("light-theme");
+    root.classList.remove("dark-theme");
+  }
+};
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [mounted, setMounted] = useState(false);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
-    setMounted(true);
-
-    const storedTheme = localStorage.getItem("theme") as Theme | null;
-
-    if (storedTheme) {
-      setTheme(storedTheme);
-      applyTheme(storedTheme);
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const initialTheme: Theme = prefersDark ? "dark" : "light";
-      setTheme(initialTheme);
-      applyTheme(initialTheme);
-    }
-  }, []);
-
-  const applyTheme = (newTheme: Theme) => {
-    const root = document.documentElement;
-    if (newTheme === "dark") {
-      root.classList.remove("light-theme");
-      root.classList.add("dark-theme");
-    } else {
-      root.classList.add("light-theme");
-      root.classList.remove("dark-theme");
-    }
-  };
+    applyTheme(theme);
+  }, [theme]);
 
   const toggleTheme = () => {
     const newTheme: Theme = theme === "dark" ? "light" : "dark";
@@ -48,10 +45,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("theme", newTheme);
     applyTheme(newTheme);
   };
-
-  if (!mounted) {
-    return <>{children}</>;
-  }
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>

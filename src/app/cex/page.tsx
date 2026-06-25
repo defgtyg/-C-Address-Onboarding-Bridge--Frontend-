@@ -11,17 +11,11 @@ export default function CexPage() {
   const [selectedNetwork, setSelectedNetwork] = useState("Stellar");
   const [cAddress, setCAddress] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [selectedCexKey, setSelectedCexKey] = useState<string>(CEX_LIST[0].name);
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
-  };
-
-  const handleSelectCex = (cex: typeof CEX_LIST[0]) => {
-    setSelectedCex(cex);
-    setSelectedCexKey(cex.name);
   };
 
   const withdrawalUrl = selectedCex.withdrawalUrl;
@@ -43,7 +37,7 @@ export default function CexPage() {
               {CEX_LIST.map((cex) => (
                 <button
                   key={cex.name}
-                  onClick={() => handleSelectCex(cex)}
+                  onClick={() => setSelectedCex(cex)}
                   className={`p-4 rounded-lg border text-left transition-all ${
                     selectedCex.name === cex.name
                       ? "border-[var(--primary)] bg-[var(--primary)]/5 cex-logo selected transform scale-105"

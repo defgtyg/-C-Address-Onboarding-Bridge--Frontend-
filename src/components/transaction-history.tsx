@@ -29,7 +29,7 @@ export default function TransactionHistory({ transactions, loading, network }: P
       key: "type",
       label: "Type",
       sortable: true,
-      render: (value, row) => {
+      render: (value) => {
         const type = typeConfig[String(value)] || typeConfig["g-to-c"];
         const Icon = type.icon;
         return (
@@ -71,7 +71,7 @@ export default function TransactionHistory({ transactions, loading, network }: P
     {
       key: "hash",
       label: "Explorer",
-      render: (value, row) =>
+      render: (value) =>
         value ? (
           <a
             href={getExplorerUrl(network, "tx", String(value))}
