@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { connectWallet, checkConnection, getWalletAddress, getCurrentNetwork } from "@/lib/stellar";
+import { loadPreferences, savePreferences, clearAllUserData, addRecentAddress } from "@/lib/user-preferences";
 
 interface WalletContextType {
   address: string | null;
@@ -11,6 +12,7 @@ interface WalletContextType {
   isConnecting: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
+  clearAllData: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType>({
@@ -21,6 +23,7 @@ const WalletContext = createContext<WalletContextType>({
   isConnecting: false,
   connect: async () => {},
   disconnect: () => {},
+  clearAllData: async () => {},
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -35,13 +38,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const net = await getCurrentNetwork();
       setAddress(pk);
       setNetwork(net);
+      if (pk) {
+        await addRecentAddress(pk);
+      }
     } else {
       setAddress(null);
     }
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(updateConnection, 0);
+    const initializePreferences = async () => {
+      const prefs = await loadPreferences();
+      setNetwork(prefs.selectedNetwork);
+      await updateConnection();
+    };
+    const timer = setTimeout(initializePreferences, 0);
     const interval = setInterval(updateConnection, 3000);
     return () => { clearTimeout(timer); clearInterval(interval); };
   }, [updateConnection]);
@@ -64,6 +75,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAddress(null);
   }, []);
 
+  const clearAllData = useCallback(async () => {
+    await clearAllUserData();
+    setAddress(null);
+  }, []);
+
   return (
     <WalletContext.Provider
       value={{
@@ -74,6 +90,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         isConnecting,
         connect,
         disconnect,
+        clearAllData,
       }}
     >
       {children}
