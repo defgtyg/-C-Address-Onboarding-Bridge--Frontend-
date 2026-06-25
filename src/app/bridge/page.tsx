@@ -46,7 +46,7 @@ import {
   USDC_ISSUERS,
 } from "@/lib/constants";
 
-type Step = "form" | "review" | "confirm";
+type Step = "form" | "review" | "simulate" | "confirm";
 type TxStatus = "idle" | "signing" | "submitting" | "success" | "error";
 type PollStatus = "pending" | "confirmed" | "failed" | null;
 
@@ -94,26 +94,25 @@ export default function BridgePage() {
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollActiveRef = useRef(false);
 
-  // Resource estimation
-  const [simStatus, setSimStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [simResult, setSimResult] = useState<SorobanSimResult | undefined>(undefined);
-  const [simError, setSimError] = useState<string | undefined>(undefined);
+  // Allowance state
+  type AllowanceStatus = "idle" | "checking" | "sufficient" | "required" | "approving" | "approved" | "error";
+  const [allowanceStatus, setAllowanceStatus] = useState<AllowanceStatus>("idle");
+  const [allowanceError, setAllowanceError] = useState<string | null>(null);
 
-  const runSimulation = async (from: string, amt: string, ast: string, net: "PUBLIC" | "TESTNET") => {
-    setSimStatus("loading");
-    setSimResult(undefined);
-    setSimError(undefined);
+  // For native XLM or when no bridge contract is set, approval is never needed
+  const needsAllowanceCheck = step === "review" && !isNativeAsset(asset) && !!BRIDGE_CONTRACT_ID && asset === "USDC";
+
+  const checkAllowance = async (owner: string, amtStr: string, net: "PUBLIC" | "TESTNET") => {
+    setAllowanceStatus("checking");
+    setAllowanceError(null);
     try {
-      const result = await simulateBridgeTx(from, amt, ast, net);
-      if (result) {
-        setSimResult(result);
-        setSimStatus("ready");
-      } else {
-        setSimStatus("idle"); // no contract configured, skip
-      }
+      const tokenContractId = USDC_ISSUERS[net];
+      const amountRaw = BigInt(Math.round(parseFloat(amtStr) * 10_000_000));
+      const current = await getTokenAllowance(tokenContractId, owner, BRIDGE_CONTRACT_ID, net);
+      setAllowanceStatus(current >= amountRaw ? "sufficient" : "required");
     } catch (e) {
-      setSimError(e instanceof Error ? e.message : "Simulation failed");
-      setSimStatus("error");
+      setAllowanceError(e instanceof Error ? e.message : "Allowance check failed");
+      setAllowanceStatus("error");
     }
   };
 
@@ -171,13 +170,30 @@ export default function BridgePage() {
     return () => { ignore = true; };
   }, [fromAddress, network]);
 
-  // Cleanup polling on unmount
+  // Cleanup polling and rate limit on unmount
   useEffect(() => {
     return () => {
       pollActiveRef.current = false;
       if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+      if (rateLimitIntervalRef.current) clearInterval(rateLimitIntervalRef.current);
     };
   }, []);
+
+  const handleApprove = async () => {
+    if (!fromAddress || !amount || !BRIDGE_CONTRACT_ID || !needsAllowanceCheck) return;
+    const tokenContractId = USDC_ISSUERS[network];
+
+    setAllowanceStatus("approving");
+    setAllowanceError(null);
+    try {
+      const amountRaw = BigInt(Math.round(parseFloat(amount) * 10_000_000));
+      await approveToken(tokenContractId, fromAddress, BRIDGE_CONTRACT_ID, amountRaw, network);
+      setAllowanceStatus("approved");
+    } catch (e) {
+      setAllowanceError(e instanceof Error ? e.message : "Approval failed");
+      setAllowanceStatus("error");
+    }
+  };
 
   // --- Polling ---
 
@@ -254,13 +270,20 @@ export default function BridgePage() {
     if (!canProceed) return;
     setStep(STEP_REVIEW);
     setTxError(null);
-    runSimulation(fromAddress, amount, asset, network);
+    setAllowanceStatus("idle");
+    setAllowanceError(null);
+    if (!isNativeAsset(asset) && BRIDGE_CONTRACT_ID && asset === "USDC" && fromAddress && amount) {
+      checkAllowance(fromAddress, amount, network);
+    }
   };
 
   const handleConfirm = async () => {
     if (!fromAddress || !toAddress || !amount) return;
     setTxStatus(STATUS_SIGNING);
     setTxError(null);
+    recordSubmissionAttempt("bridge_submission");
+    recordTransactionSubmission(fromAddress, toAddress, amount, asset);
+
     try {
       const result = await bridgeViaContract(fromAddress, toAddress, amount, asset, network);
       setTxHash(result.hash);
@@ -301,9 +324,8 @@ export default function BridgePage() {
     setPollTimedOut(false);
     setTrustlineActionStatus(STATUS_IDLE);
     setTrustlineError(null);
-    setSimStatus("idle");
-    setSimResult(undefined);
-    setSimError(undefined);
+    setAllowanceStatus("idle");
+    setAllowanceError(null);
   };
 
   const handleUndo = () => {
@@ -365,7 +387,8 @@ export default function BridgePage() {
                       type="text"
                       value={fromAddress}
                       onChange={(e) => {
-                        setFromAddress(e.target.value);
+                        const sanitized = sanitizeStellarAddress(e.target.value) || e.target.value;
+                        setFromAddress(sanitized);
                         setSourceBalance(null);
                         setAccountExists(null);
                         setAllBalances([]);
@@ -412,7 +435,10 @@ export default function BridgePage() {
                     <input
                       type="text"
                       value={toAddress}
-                      onChange={(e) => setToAddress(e.target.value)}
+                      onChange={(e) => {
+                        const sanitized = sanitizeCAddress(e.target.value) || e.target.value;
+                        setToAddress(sanitized);
+                      }}
                       placeholder="CABC...DEF"
                       className="w-full pl-10 pr-4 py-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm font-mono focus:outline-none focus:border-[var(--primary)] transition-colors"
                       disabled={txStatus !== STATUS_IDLE}
@@ -433,7 +459,7 @@ export default function BridgePage() {
                       <input
                         type="text"
                         value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        onChange={(e) => setAmount(sanitizeAmount(e.target.value))}
                         placeholder="0.00"
                         className="w-full px-4 py-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)] transition-colors"
                         disabled={txStatus !== "idle"}
@@ -511,15 +537,15 @@ export default function BridgePage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center p-4 rounded-lg bg-[var(--surface-2)]">
                     <span className="text-sm text-[var(--text-muted)]">From</span>
-                    <span className="text-sm font-mono">{fromAddress}</span>
+                    <span className="text-sm font-mono">{encodeHtml(fromAddress)}</span>
                   </div>
                   <div className="flex justify-between items-center p-4 rounded-lg bg-[var(--surface-2)]">
                     <span className="text-sm text-[var(--text-muted)]">To</span>
-                    <span className="text-sm font-mono">{toAddress}</span>
+                    <span className="text-sm font-mono">{encodeHtml(toAddress)}</span>
                   </div>
                   <div className="flex justify-between items-center p-4 rounded-lg bg-[var(--surface-2)]">
                     <span className="text-sm text-[var(--text-muted)]">Amount</span>
-                    <span className="text-sm font-semibold">{amount} {asset}</span>
+                    <span className="text-sm font-semibold">{encodeHtml(amount)} {encodeHtml(asset)}</span>
                   </div>
                   <div className="flex justify-between items-center p-4 rounded-lg bg-[var(--surface-2)]">
                     <span className="text-sm text-[var(--text-muted)]">Network</span>
@@ -531,12 +557,66 @@ export default function BridgePage() {
                   </div>
                 </div>
 
+                {/* Allowance status row */}
+                {needsAllowanceCheck && (
+                  <div className="p-4 rounded-lg bg-[var(--surface-2)] space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-[var(--text-muted)]">Token Approval</span>
+                      {allowanceStatus === "checking" && (
+                        <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Checking allowance…
+                        </span>
+                      )}
+                      {(allowanceStatus === "sufficient" || allowanceStatus === "approved") && (
+                        <span className="flex items-center gap-1 text-xs text-[var(--success)]">
+                          <Check className="w-3 h-3" /> Approved
+                        </span>
+                      )}
+                      {allowanceStatus === "required" && (
+                        <span className="text-xs text-amber-400">Approval Required</span>
+                      )}
+                      {allowanceStatus === "approving" && (
+                        <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Approving…
+                        </span>
+                      )}
+                      {allowanceStatus === "error" && (
+                        <span className="text-xs text-[var(--error)]">Check failed</span>
+                      )}
+                    </div>
+                    {allowanceStatus === "required" && (
+                      <button
+                        onClick={handleApprove}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-medium hover:bg-amber-500/30 transition-colors"
+                      >
+                        Approve {asset} for Bridge Contract
+                      </button>
+                    )}
+                    {allowanceError && (
+                      <p className="text-xs text-[var(--error)]">{allowanceError}</p>
+                    )}
+                  </div>
+                )}
+
+                {!needsAllowanceCheck && (
+                  <div className="flex justify-between items-center p-4 rounded-lg bg-[var(--surface-2)]">
+                    <span className="text-sm text-[var(--text-muted)]">Token Approval</span>
+                    <span className="text-xs text-[var(--text-muted)]">Not needed for XLM</span>
+                  </div>
+                )}
+
                 {txError && (
                   <div className="p-4 rounded-lg bg-[var(--error)]/10 border border-[var(--error)]/20 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-[var(--error)] flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-[var(--error)]">Transaction Failed</p>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">{txError}</p>
+                      <p className="text-sm font-medium text-[var(--error)]">
+                        {rateLimitRemaining > 0 ? "Rate Limited" : "Transaction Failed"}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">
+                        {rateLimitRemaining > 0
+                          ? `Please wait ${Math.ceil(rateLimitRemaining / 1000)} seconds before submitting again`
+                          : txError}
+                      </p>
                     </div>
                   </div>
                 )}
