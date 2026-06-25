@@ -12,6 +12,7 @@ export default function DashboardPage() {
   const { isConnected, address, network, connect } = useWallet();
   const [copied, setCopied] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
+  const [allBalances, setAllBalances] = useState<{ asset: string; amount: string }[]>([]);
   const [transactions, setTransactions] = useState<BridgeTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +28,7 @@ export default function DashboardPage() {
           fetchRecentTransactions(address, network, 10),
         ]);
         setBalance(balResult.total);
+        setAllBalances(balResult.balances);
         setTransactions(txResult);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Failed to fetch data");
@@ -152,6 +154,22 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {allBalances.length > 0 && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 mb-6">
+          <h3 className="text-sm font-semibold mb-3">Token Balances</h3>
+          <div className="divide-y divide-[var(--border)]">
+            {allBalances.map((b) => (
+              <div key={b.asset} className="flex justify-between items-center py-2 first:pt-0 last:pb-0">
+                <span className="text-sm text-[var(--text-muted)]">{b.asset}</span>
+                <span className="text-sm font-mono">
+                  {parseFloat(b.amount).toFixed(b.asset === "XLM" ? 2 : 6)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <Link

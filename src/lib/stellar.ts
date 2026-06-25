@@ -312,3 +312,92 @@ export function getExplorerUrl(
 export function getAccountMinimumBalance(): string {
   return "1.0";
 }
+
+export const USDC_ISSUERS: Record<"PUBLIC" | "TESTNET", string> = {
+  PUBLIC: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+  TESTNET: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+};
+
+export interface AccountInfo {
+  exists: boolean;
+  balances: { asset: string; amount: string }[];
+}
+
+export async function loadAccountInfo(
+  address: string,
+  network: "PUBLIC" | "TESTNET"
+): Promise<AccountInfo> {
+  const server = getHorizonServer(network);
+  try {
+    const account = await server.loadAccount(address);
+    const balances = (account.balances as HorizonBalance[]).map((b) => ({
+      asset: b.asset_type === "native" ? "XLM" : (b.asset_code || "unknown"),
+      amount: b.balance,
+    }));
+    return { exists: true, balances };
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number } };
+    if (err.response?.status === 404) {
+      return { exists: false, balances: [] };
+    }
+    throw e;
+  }
+}
+
+export async function hasTrustline(
+  address: string,
+  assetCode: string,
+  network: "PUBLIC" | "TESTNET"
+): Promise<boolean> {
+  const info = await loadAccountInfo(address, network);
+  return info.balances.some((b) => b.asset === assetCode);
+}
+
+export function changeTrustOperation(assetCode: string, issuer: string) {
+  return Operation.changeTrust({ asset: new Asset(assetCode, issuer) });
+}
+
+export async function buildAndSubmitChangeTrust(
+  sourceAddress: string,
+  assetCode: string,
+  issuer: string,
+  network: "PUBLIC" | "TESTNET"
+): Promise<PaymentResult> {
+  const server = getHorizonServer(network);
+  const passphrase = getNetworkPassphrase(network);
+  const account = await server.loadAccount(sourceAddress);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: passphrase,
+  })
+    .addOperation(changeTrustOperation(assetCode, issuer))
+    .setTimeout(30)
+    .build();
+
+  const signedResult = await signTransaction(tx.toXDR(), { networkPassphrase: passphrase });
+  if ("error" in signedResult && signedResult.error) {
+    throw new Error(`Signing failed: ${signedResult.error}`);
+  }
+  const signedXDR = (signedResult as { signedTxXdr: string }).signedTxXdr;
+  const signedTx = TransactionBuilder.fromXDR(signedXDR, passphrase);
+  const result = await server.submitTransaction(signedTx);
+  return { hash: result.hash, successful: result.successful };
+}
+
+export async function getTransactionStatus(
+  hash: string,
+  network: "PUBLIC" | "TESTNET"
+): Promise<"pending" | "confirmed" | "failed"> {
+  const server = getHorizonServer(network);
+  try {
+    const tx = await server.transactions().transaction(hash).call();
+    return tx.successful ? "confirmed" : "failed";
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number } };
+    if (err.response?.status === 404) {
+      return "pending";
+    }
+    throw e;
+  }
+}
