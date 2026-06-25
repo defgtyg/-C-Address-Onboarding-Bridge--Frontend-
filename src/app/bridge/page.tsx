@@ -8,6 +8,7 @@ import {
 import { useWallet } from "@/components/wallet-provider";
 import { ToastContainer, useToast } from "@/components/toast";
 import { useFormHistory, type FormState } from "@/hooks/useFormHistory";
+import { getBridgeContractId, NETWORK_CONFIG_ERRORS } from "@/config/networks";
 import {
   isValidStellarAddress,
   isCAddress,
@@ -53,6 +54,8 @@ type PollStatus = "pending" | "confirmed" | "failed" | null;
 export default function BridgePage() {
   const { isConnected, address, network, connect } = useWallet();
   const { toasts, add: addToast, remove: removeToast } = useToast();
+
+  const bridgeContractId = getBridgeContractId(network);
 
   const [fromAddress, setFromAddress] = useState("");
   const [toAddress, setToAddress] = useState("");
@@ -100,7 +103,7 @@ export default function BridgePage() {
   const [allowanceError, setAllowanceError] = useState<string | null>(null);
 
   // For native XLM or when no bridge contract is set, approval is never needed
-  const needsAllowanceCheck = step === "review" && !isNativeAsset(asset) && !!BRIDGE_CONTRACT_ID && asset === "USDC";
+  const needsAllowanceCheck = step === "review" && !isNativeAsset(asset) && !!bridgeContractId && asset === "USDC";
 
   const checkAllowance = async (owner: string, amtStr: string, net: "PUBLIC" | "TESTNET") => {
     setAllowanceStatus("checking");
@@ -108,7 +111,7 @@ export default function BridgePage() {
     try {
       const tokenContractId = USDC_ISSUERS[net];
       const amountRaw = BigInt(Math.round(parseFloat(amtStr) * 10_000_000));
-      const current = await getTokenAllowance(tokenContractId, owner, BRIDGE_CONTRACT_ID, net);
+      const current = await getTokenAllowance(tokenContractId, owner, bridgeContractId, net);
       setAllowanceStatus(current >= amountRaw ? "sufficient" : "required");
     } catch (e) {
       setAllowanceError(e instanceof Error ? e.message : "Allowance check failed");
@@ -180,14 +183,14 @@ export default function BridgePage() {
   }, []);
 
   const handleApprove = async () => {
-    if (!fromAddress || !amount || !BRIDGE_CONTRACT_ID || !needsAllowanceCheck) return;
+    if (!fromAddress || !amount || !bridgeContractId || !needsAllowanceCheck) return;
     const tokenContractId = USDC_ISSUERS[network];
 
     setAllowanceStatus("approving");
     setAllowanceError(null);
     try {
       const amountRaw = BigInt(Math.round(parseFloat(amount) * 10_000_000));
-      await approveToken(tokenContractId, fromAddress, BRIDGE_CONTRACT_ID, amountRaw, network);
+      await approveToken(tokenContractId, fromAddress, bridgeContractId, amountRaw, network);
       setAllowanceStatus("approved");
     } catch (e) {
       setAllowanceError(e instanceof Error ? e.message : "Approval failed");
@@ -272,7 +275,7 @@ export default function BridgePage() {
     setTxError(null);
     setAllowanceStatus("idle");
     setAllowanceError(null);
-    if (!isNativeAsset(asset) && BRIDGE_CONTRACT_ID && asset === "USDC" && fromAddress && amount) {
+    if (!isNativeAsset(asset) && bridgeContractId && asset === "USDC" && fromAddress && amount) {
       checkAllowance(fromAddress, amount, network);
     }
   };
@@ -343,6 +346,20 @@ export default function BridgePage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <ToastContainer toasts={toasts} onClose={removeToast} />
+
+      {!bridgeContractId && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-sm text-amber-400">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {NETWORK_CONFIG_ERRORS.NO_CONTRACT}
+        </div>
+      )}
+
+      {isConnected && !bridgeContractId && getBridgeContractId(network === "PUBLIC" ? "TESTNET" : "PUBLIC") && (
+        <div className="mb-4 p-3 rounded-lg bg-[var(--error)]/10 border border-[var(--error)]/20 flex items-center gap-2 text-sm text-[var(--error)]">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          {NETWORK_CONFIG_ERRORS.NETWORK_MISMATCH}
+        </div>
+      )}
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
