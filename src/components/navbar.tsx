@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { Wallet, ArrowLeftRight, CreditCard, Building2, LayoutDashboard, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { useWallet } from "./wallet-provider";
-import WalletModal from "./wallet-modal";
+import { ThemeToggle } from "./theme-toggle";
+import { useEscapeKey } from "@/hooks/use-keyboard-shortcuts";
 
 const navLinks = [
   { href: "/bridge", label: "Bridge", icon: ArrowLeftRight },
@@ -23,6 +24,12 @@ export default function Navbar() {
   const handleConnectClick = () => {
     setWalletModalOpen(true);
   };
+
+  useEscapeKey(() => {
+    if (mobileOpen) {
+      setMobileOpen(false);
+    }
+  });
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-xl">
@@ -56,13 +63,11 @@ export default function Navbar() {
             })}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
             {isConnected ? (
-              <button
-                onClick={handleConnectClick}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] hover:border-[var(--primary)] transition-colors cursor-pointer"
-              >
-                <div className="w-2 h-2 rounded-full bg-[var(--success)]" />
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] bounce-in">
+                <div className="w-2 h-2 rounded-full bg-[var(--success)] pulse-glow" />
                 <span className="text-xs font-mono text-[var(--text-muted)]">
                   {address?.slice(0, 4)}...{address?.slice(-4)}
                 </span>
