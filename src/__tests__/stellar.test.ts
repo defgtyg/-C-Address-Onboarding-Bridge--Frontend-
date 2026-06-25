@@ -61,6 +61,20 @@ vi.mock("@stellar/stellar-sdk", async () => {
     toXDR: vi.fn().mockReturnValue("mock-signed-xdr"),
   });
 
+  function MockAsset(
+    this: Record<string, unknown>,
+    code: string,
+    issuer?: string,
+  ) {
+    this.code = code;
+    this.assetCode = code;
+    this.issuer = issuer;
+  }
+  MockAsset.native = vi.fn().mockReturnValue({
+    code: "XLM",
+    assetCode: "XLM",
+  });
+
   return {
     ...actual,
     Horizon: { ...actual.Horizon, Server: MockHorizonServer },
@@ -69,10 +83,12 @@ vi.mock("@stellar/stellar-sdk", async () => {
       ...actual.Operation,
       payment: vi.fn().mockReturnValue({ type: "payment" }),
     },
+    Asset: MockAsset,
   };
 });
 
 import { signTransaction } from "@stellar/freighter-api";
+import { Operation } from "@stellar/stellar-sdk";
 import {
   isValidStellarAddress,
   isCAddress,
@@ -400,6 +416,9 @@ describe("bridgeViaContract", () => {
     expect(mockLoadAccount).toHaveBeenCalledWith(G_ADDRESS);
     expect(signTransaction).toHaveBeenCalled();
     expect(mockSubmitTransaction).toHaveBeenCalled();
+    expect(vi.mocked(Operation.payment).mock.calls[0][0].destination).toBe(
+      CONTRACT_ID,
+    );
   });
 
   it("falls back to direct payment when BRIDGE_CONTRACT_ID is empty", async () => {
@@ -416,6 +435,9 @@ describe("bridgeViaContract", () => {
     expect(result).toEqual({ hash: MOCK_TX_HASH, successful: true });
     expect(mockLoadAccount).toHaveBeenCalledTimes(1);
     expect(mockSubmitTransaction).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(Operation.payment).mock.calls[0][0].destination).toBe(
+      C_ADDRESS,
+    );
   });
 
   it("re-wraps result_codes error when submit includes extras result_codes", async () => {
