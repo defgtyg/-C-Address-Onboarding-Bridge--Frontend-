@@ -6,6 +6,7 @@ import {
   Loader2, ExternalLink, XCircle, AlertTriangle,
 } from "lucide-react";
 import { useWallet } from "@/components/wallet-provider";
+import { useSubmitShortcut } from "@/hooks/use-keyboard-shortcuts";
 import {
   isValidStellarAddress,
   isCAddress,
@@ -101,6 +102,20 @@ export default function BridgePage() {
       if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
     };
   }, []);
+
+  // Keyboard shortcut for form submission
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && step === "form" && canProceed) {
+        e.preventDefault();
+        setStep("review");
+        setTxError(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [step, canProceed]);
 
   // --- Polling ---
 

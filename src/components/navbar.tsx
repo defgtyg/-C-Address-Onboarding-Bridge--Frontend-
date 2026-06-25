@@ -6,6 +6,7 @@ import { Wallet, ArrowLeftRight, CreditCard, Building2, LayoutDashboard, Menu, X
 import { useState } from "react";
 import { useWallet } from "./wallet-provider";
 import { ThemeToggle } from "./theme-toggle";
+import { useEscapeKey } from "@/hooks/use-keyboard-shortcuts";
 
 const navLinks = [
   { href: "/bridge", label: "Bridge", icon: ArrowLeftRight },
@@ -18,6 +19,12 @@ export default function Navbar() {
   const pathname = usePathname();
   const { isConnected, address, connect, isConnecting } = useWallet();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEscapeKey(() => {
+    if (mobileOpen) {
+      setMobileOpen(false);
+    }
+  });
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-xl">

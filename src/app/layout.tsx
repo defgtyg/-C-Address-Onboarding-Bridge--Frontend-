@@ -5,6 +5,7 @@ import { WalletProvider } from "@/components/wallet-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+import { KeyboardShortcutsInfo } from "@/components/keyboard-shortcuts-info";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Navbar />
               <main className="flex-1 pt-16">{children}</main>
               <Footer />
+              <KeyboardShortcutsInfo />
             </div>
           </WalletProvider>
         </ThemeProvider>
