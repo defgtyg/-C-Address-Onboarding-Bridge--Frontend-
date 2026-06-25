@@ -205,3 +205,17 @@ describe("getCurrentNetwork", () => {
     expect(result).toBe("TESTNET");
   });
 });
+
+describe("isNativeAsset", () => {
+  it("returns true for XLM", () => {
+    expect(isNativeAsset("XLM")).toBe(true);
+  });
+
+  it("returns false for USDC", () => {
+    expect(isNativeAsset("USDC")).toBe(false);
+  });
+
+  it("returns false for arbitrary token code", () => {
+    expect(isNativeAsset("yXLM")).toBe(false);
+  });
+});
