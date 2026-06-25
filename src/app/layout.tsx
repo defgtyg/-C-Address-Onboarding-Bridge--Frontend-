@@ -4,6 +4,7 @@ import "./globals.css";
 import { WalletProvider } from "@/components/wallet-provider";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+import { NetworkMismatchBanner } from "@/components/network-mismatch-banner";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WalletProvider>
           <div className="min-h-screen flex flex-col">
             <Navbar />
+            <NetworkMismatchBanner />
             <main className="flex-1 pt-16">{children}</main>
             <Footer />
           </div>

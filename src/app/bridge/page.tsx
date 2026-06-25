@@ -23,7 +23,7 @@ type TxStatus = "idle" | "signing" | "submitting" | "success" | "error";
 type PollStatus = "pending" | "confirmed" | "failed" | null;
 
 export default function BridgePage() {
-  const { isConnected, address, network, connect } = useWallet();
+  const { isConnected, address, network, connect, isNetworkMismatched } = useWallet();
   const [fromAddress, setFromAddress] = useState("");
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -169,6 +169,12 @@ export default function BridgePage() {
 
   const handleConfirm = async () => {
     if (!fromAddress || !toAddress || !amount) return;
+    if (isNetworkMismatched) {
+      setTxError("Network mismatch: your wallet network does not match the app network. Please switch networks before transacting.");
+      setTxStatus("error");
+      setStep("confirm");
+      return;
+    }
     setTxStatus("signing");
     setTxError(null);
     try {
