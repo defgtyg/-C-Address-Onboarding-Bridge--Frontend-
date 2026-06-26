@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { Wallet, ArrowLeftRight, CreditCard, Building2, Copy, Check, ExternalLink, Plus, Loader2 } from "lucide-react";
-import { useWallet } from "@/components/wallet-provider";
-import TransactionHistory from "@/components/transaction-history";
+import { useWallet, TransactionHistory } from "@/components";
 import Link from "next/link";
-import { getAccountBalances, fetchRecentTransactions, getExplorerUrl, isCAddress, getSorobanAccountBalances } from "@/lib/stellar";
-import type { BridgeTransaction } from "@/lib/types";
-import { getBridgeContractId } from "@/config/networks";
 import {
+  getAccountBalances,
+  fetchRecentTransactions,
+  getExplorerUrl,
+  isCAddress,
+  getSorobanAccountBalances,
+  type BridgeTransaction,
   ASSET_XLM,
   NETWORK_DISPLAY,
   DEFAULT_TX_LIMIT,
@@ -20,7 +22,8 @@ import {
   STATUS_PENDING,
   ENV_BRIDGE_CONTRACT_ID,
   USDC_ISSUERS,
-} from "@/lib/constants";
+} from "@/lib";
+import { getBridgeContractId } from "@/config/networks";
 
 export default function DashboardPage() {
   const { isConnected, address, network, connect } = useWallet();

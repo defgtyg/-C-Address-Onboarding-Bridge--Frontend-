@@ -1,8 +1,15 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { connectWallet, checkConnection, getWalletAddress, getCurrentNetwork } from "@/lib/stellar";
-import { WALLET_INITIAL_DELAY_MS, WALLET_POLL_INTERVAL_MS, DEFAULT_NETWORK } from "@/lib/constants";
+import {
+  connectWallet,
+  checkConnection,
+  getWalletAddress,
+  getCurrentNetwork,
+  WALLET_INITIAL_DELAY_MS,
+  WALLET_POLL_INTERVAL_MS,
+  DEFAULT_NETWORK,
+} from "@/lib";
 
 const APP_NETWORK_KEY = "stellar_app_network";
 
