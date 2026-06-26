@@ -8,6 +8,7 @@ import {
 import { useWallet } from "@/components/wallet-provider";
 import { ToastContainer, useToast } from "@/components/toast";
 import { useFormHistory, type FormState } from "@/hooks/useFormHistory";
+import { useMultiStepForm } from "@/hooks/useMultiStepForm";
 import { getBridgeContractId, NETWORK_CONFIG_ERRORS } from "@/config/networks";
 import {
   isValidStellarAddress,
@@ -49,7 +50,6 @@ import {
   USDC_ISSUERS,
 } from "@/lib/constants";
 
-type Step = "form" | "review" | "simulate" | "confirm";
 type TxStatus = "idle" | "signing" | "submitting" | "success" | "error";
 type PollStatus = "pending" | "confirmed" | "failed" | null;
 
@@ -63,7 +63,9 @@ export default function BridgePage() {
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [asset, setAsset] = useState<string>(ASSET_XLM);
-  const [step, setStep] = useState<Step>(STEP_FORM);
+  const { currentStep: step, goTo: setStep } = useMultiStepForm(
+    [STEP_FORM, STEP_REVIEW, STEP_CONFIRM] as const,
+  );
   const [txStatus, setTxStatus] = useState<TxStatus>(STATUS_IDLE);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
@@ -272,7 +274,7 @@ export default function BridgePage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [step, canProceed]);
+  }, [step, canProceed, setStep]);
 
   // --- Handlers ---
 
