@@ -7,7 +7,7 @@ import TransactionHistory from "@/components/transaction-history";
 import Link from "next/link";
 import { getAccountBalances, fetchRecentTransactions, getExplorerUrl, isCAddress, getSorobanAccountBalances } from "@/lib/stellar";
 import type { BridgeTransaction } from "@/lib/types";
-import { BRIDGE_CONTRACT_ID } from "@/lib/types";
+import { getBridgeContractId } from "@/config/networks";
 import {
   ASSET_XLM,
   NETWORK_DISPLAY,
@@ -107,7 +107,7 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {!BRIDGE_CONTRACT_ID && (
+      {!getBridgeContractId(network) && (
         <div className="mb-6 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400 flex items-center gap-2">
           <span className="font-medium">Info:</span>
           Bridge contract not configured — bridge transactions will use direct payment.
