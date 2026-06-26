@@ -41,8 +41,22 @@ describe("isValidStellarAddress", () => {
     expect(isValidStellarAddress("GABC")).toBe(false);
   });
 
+  it("rejects too-long address", () => {
+    expect(isValidStellarAddress(G_ADDRESS + "EXTRA")).toBe(false);
+  });
+
   it("rejects invalid prefix", () => {
     const addr = "X" + G_ADDRESS.slice(1);
+    expect(isValidStellarAddress(addr)).toBe(false);
+  });
+
+  it("rejects lowercase characters", () => {
+    const lowercase = G_ADDRESS.toLowerCase();
+    expect(isValidStellarAddress(lowercase)).toBe(false);
+  });
+
+  it("rejects special characters", () => {
+    const addr = "GAIUIQ7G3TMN53Z2Y3Y5C!I7Q7ZQJX4W5F5N5Z5Q5Z5Q5Z5Q5Z5Q5Z5A";
     expect(isValidStellarAddress(addr)).toBe(false);
   });
 });
