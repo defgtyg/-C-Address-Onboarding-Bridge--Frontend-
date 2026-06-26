@@ -621,6 +621,8 @@ export default function BridgePage() {
                   </div>
                 )}
 
+                <ResourcePanel status={simStatus} result={simResult} error={simError} />
+
                 <div className="flex gap-3">
                   <button
                     onClick={handleReset}
