@@ -269,10 +269,15 @@ export async function bridgeViaContract(
     return buildAndSubmitPayment(sourceAddress, cAddress, amount, assetCode, network, feeStroops);
   }
 
-  const server = getHorizonServer(network);
+  const server = getSorobanRpcServer(network);
   const passphrase = getNetworkPassphrase(network);
 
-  const account = await server.loadAccount(sourceAddress);
+  let account;
+  try {
+    account = await server.getAccount(sourceAddress);
+  } catch (e) {
+    throw new Error(`Failed to load account ${sourceAddress}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 
   const tx = new TransactionBuilder(account, {
     fee: feeStroops ?? BASE_FEE,
@@ -288,12 +293,16 @@ export async function bridgeViaContract(
     .setTimeout(STELLAR_TX_TIMEOUT_SECONDS)
     .build();
 
-  const unsignedXDR = tx.toXDR();
+  // prepareTransaction runs simulation and populates Soroban footprint + fees
+  let prepared;
+  try {
+    prepared = await server.prepareTransaction(tx);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : JSON.stringify(e);
+    throw new Error(`Soroban simulation failed: ${msg}`);
+  }
 
-  const signedResult = await signTransaction(unsignedXDR, {
-    networkPassphrase: passphrase,
-  });
-
+  const signedResult = await signTransaction(prepared.toXDR(), { networkPassphrase: passphrase });
   if ("error" in signedResult && signedResult.error) {
     throw new Error(`Signing failed: ${signedResult.error}`);
   }
@@ -301,21 +310,28 @@ export async function bridgeViaContract(
   const signedXDR = (signedResult as { signedTxXdr: string }).signedTxXdr;
   const signedTx = TransactionBuilder.fromXDR(signedXDR, passphrase);
 
-  try {
-    const result = await server.submitTransaction(signedTx);
-    return {
-      hash: result.hash,
-      successful: result.successful,
-    };
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { extras?: { result_codes?: unknown } } } };
-    if (err.response?.data?.extras?.result_codes) {
-      throw new Error(
-        `Transaction failed: ${JSON.stringify(err.response.data.extras.result_codes)}`
-      );
-    }
-    throw e;
+  const sendResult = await server.sendTransaction(signedTx);
+  if (sendResult.status === "ERROR") {
+    throw new Error(
+      `Contract invocation failed: ${JSON.stringify(sendResult.errorResult)}`
+    );
   }
+
+  let polled;
+  try {
+    polled = await server.pollTransaction(sendResult.hash, {
+      attempts: 20,
+      sleepStrategy: rpc.BasicSleepStrategy,
+    });
+  } catch (e) {
+    throw new Error(`Polling failed for tx ${sendResult.hash}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  if (polled.status !== "SUCCESS") {
+    throw new Error(`Bridge contract call did not succeed (status: ${polled.status})`);
+  }
+
+  return { hash: sendResult.hash, successful: true };
 }
 
 export function getExplorerUrl(
