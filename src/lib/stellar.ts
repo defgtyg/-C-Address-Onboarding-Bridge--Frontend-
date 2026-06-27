@@ -52,18 +52,55 @@ import {
 export type { BridgeTransaction as BridgeTransactionData } from "./types";
 export type { PaymentResult, AccountBalances } from "./types";
 
+/**
+ * Returns a Horizon HTTP client for the given Stellar network.
+ *
+ * @param network - `"PUBLIC"` for mainnet or `"TESTNET"` for the test network.
+ * @returns A configured {@link Horizon.Server} instance.
+ *
+ * @example
+ * const server = getHorizonServer("TESTNET");
+ * const account = await server.loadAccount("G...");
+ */
 export function getHorizonServer(network: "PUBLIC" | "TESTNET"): Horizon.Server {
   return new Horizon.Server(HORIZON_URL[network]);
 }
 
+/**
+ * Returns a Soroban RPC client for the given Stellar network.
+ *
+ * @param network - `"PUBLIC"` for mainnet or `"TESTNET"` for the test network.
+ * @returns A configured {@link rpc.Server} instance.
+ *
+ * @example
+ * const rpcServer = getSorobanRpcServer("TESTNET");
+ * const account = await rpcServer.getAccount("G...");
+ */
 export function getSorobanRpcServer(network: "PUBLIC" | "TESTNET"): rpc.Server {
   return new rpc.Server(SOROBAN_RPC_URL[network]);
 }
 
+/**
+ * Returns the Stellar network passphrase used to sign transactions.
+ *
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns The network passphrase string (e.g. `"Public Global Stellar Network ; September 2015"`).
+ */
 export function getNetworkPassphrase(network: "PUBLIC" | "TESTNET"): string {
   return network === NETWORK_PUBLIC ? Networks.PUBLIC : Networks.TESTNET;
 }
 
+/**
+ * Prompts the user to connect their Freighter wallet and returns the active address.
+ *
+ * Prerequisites: Freighter browser extension must be installed.
+ *
+ * @returns The connected G-address string, or `null` if Freighter is not installed or the user denies access.
+ *
+ * @example
+ * const address = await connectWallet();
+ * if (address) console.log("Connected:", address);
+ */
 export async function connectWallet(): Promise<string | null> {
   try {
     const conn = await isConnected();
@@ -78,6 +115,11 @@ export async function connectWallet(): Promise<string | null> {
   }
 }
 
+/**
+ * Checks whether the Freighter extension is installed and connected.
+ *
+ * @returns `true` if Freighter is connected, `false` otherwise.
+ */
 export async function checkConnection(): Promise<boolean> {
   try {
     const result = await isConnected();
@@ -87,6 +129,11 @@ export async function checkConnection(): Promise<boolean> {
   }
 }
 
+/**
+ * Returns the active Freighter wallet address without prompting for connection.
+ *
+ * @returns The G-address string, or `null` if Freighter is unavailable.
+ */
 export async function getWalletAddress(): Promise<string | null> {
   try {
     const result = await getAddress();
@@ -96,6 +143,11 @@ export async function getWalletAddress(): Promise<string | null> {
   }
 }
 
+/**
+ * Returns the Stellar network that Freighter is currently configured for.
+ *
+ * @returns `"PUBLIC"` or `"TESTNET"`. Falls back to the app default if Freighter is unavailable.
+ */
 export async function getCurrentNetwork(): Promise<"PUBLIC" | "TESTNET"> {
   try {
     const result = await getNetwork();
@@ -105,18 +157,40 @@ export async function getCurrentNetwork(): Promise<"PUBLIC" | "TESTNET"> {
   }
 }
 
+/**
+ * Returns `true` if the given string is a syntactically valid Stellar address (G- or C-address).
+ *
+ * @param address - The address string to validate.
+ */
 export function isValidStellarAddress(address: string): boolean {
   return STELLAR_ADDRESS_REGEX.test(address);
 }
 
+/**
+ * Returns `true` if the address is a Soroban contract address (starts with `C`, 56 chars).
+ *
+ * @param address - The address string to check.
+ */
 export function isCAddress(address: string): boolean {
   return address.startsWith("C") && address.length === STELLAR_ADDRESS_LENGTH;
 }
 
+/**
+ * Returns `true` if the address is a classic Stellar account address (starts with `G`, 56 chars).
+ *
+ * @param address - The address string to check.
+ */
 export function isGAddress(address: string): boolean {
   return address.startsWith("G") && address.length === STELLAR_ADDRESS_LENGTH;
 }
 
+/**
+ * Validates required environment variables and returns a list of human-readable warnings.
+ *
+ * Missing variables do not throw; they produce warnings so the app can degrade gracefully.
+ *
+ * @returns Array of warning strings. Empty array means all env vars are set.
+ */
 export function validateEnvironment(): string[] {
   const warnings: string[] = [];
   if (!process.env[ENV_BRIDGE_CONTRACT_ID]) {
@@ -150,6 +224,14 @@ interface HorizonPayment {
   transaction_hash?: string;
 }
 
+/**
+ * Fetches all asset balances for a classic Stellar (G-address) account via Horizon.
+ *
+ * @param address - The G-address of the account.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns An {@link AccountBalances} object with `total` XLM and a `balances` array.
+ *          Returns zeroed balances if the account does not exist or the request fails.
+ */
 export async function getAccountBalances(
   address: string,
   network: "PUBLIC" | "TESTNET"
@@ -168,6 +250,15 @@ export async function getAccountBalances(
   }
 }
 
+/**
+ * Fetches the most recent payment operations for a Stellar account from Horizon.
+ *
+ * @param address - The G-address to query.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @param limit - Maximum number of records to return (default: {@link DEFAULT_TX_LIMIT}).
+ * @returns Array of {@link BridgeTransaction} records, ordered newest first.
+ *          Returns an empty array on error.
+ */
 export async function fetchRecentTransactions(
   address: string,
   network: "PUBLIC" | "TESTNET",
@@ -198,6 +289,27 @@ export async function fetchRecentTransactions(
   }
 }
 
+/**
+ * Builds, signs via Freighter, and submits a Stellar payment transaction.
+ *
+ * For XLM the native asset is used. For any other asset code the account's
+ * existing trustline is looked up to determine the issuer.
+ *
+ * @param sourceAddress - G-address of the signing account.
+ * @param destinationAddress - G- or C-address of the recipient.
+ * @param amount - Amount to send as a decimal string (e.g. `"10.5"`).
+ * @param assetCode - Asset code: `"XLM"` or an alphanumeric code (e.g. `"USDC"`).
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @param feeStroops - Optional fee in stroops; defaults to Stellar BASE_FEE (100).
+ * @returns A {@link PaymentResult} with `hash` and `successful` flag.
+ * @throws If the account has no trustline for `assetCode`, signing is rejected, or submission fails.
+ *
+ * @example
+ * const result = await buildAndSubmitPayment(
+ *   "G...", "C...", "50", "USDC", "TESTNET"
+ * );
+ * console.log("tx hash:", result.hash);
+ */
 export async function buildAndSubmitPayment(
   sourceAddress: string,
   destinationAddress: string,
@@ -257,6 +369,19 @@ export async function buildAndSubmitPayment(
   };
 }
 
+/**
+ * Builds (but does not sign or submit) a bridge payment transaction.
+ *
+ * Sends to the configured bridge contract address when `BRIDGE_CONTRACT_ID` is set,
+ * otherwise sends directly to `cAddress`.
+ *
+ * @param sourceAddress - G-address of the signing account.
+ * @param cAddress - Target Soroban C-address.
+ * @param amount - XLM amount as a decimal string.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @param feeStroop - Fee in stroops (default: BASE_FEE).
+ * @returns An unsigned {@link TransactionBuilder} result (call `.toXDR()` or sign directly).
+ */
 export async function buildBridgeTransaction(
   sourceAddress: string,
   cAddress: string,
@@ -273,6 +398,27 @@ export async function buildBridgeTransaction(
     .build();
 }
 
+/**
+ * Sends funds to a Soroban C-address, routing through the bridge contract when available.
+ *
+ * When `BRIDGE_CONTRACT_ID` is set the transaction is prepared via Soroban RPC
+ * (simulation + footprint population), signed with Freighter, and polled until
+ * confirmed. Without a contract it falls back to {@link buildAndSubmitPayment}.
+ *
+ * @param sourceAddress - G-address of the signing account.
+ * @param cAddress - Target Soroban C-address.
+ * @param amount - Amount as a decimal string.
+ * @param assetCode - Asset code (e.g. `"XLM"`, `"USDC"`).
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @param feeStroops - Optional fee override in stroops.
+ * @returns A {@link PaymentResult} with `hash` and `successful: true` on success.
+ * @throws On account load failure, simulation error, signing rejection, or non-SUCCESS poll result.
+ *
+ * @example
+ * const result = await bridgeViaContract(
+ *   "G...", "CABC...XYZ", "100", "XLM", "TESTNET"
+ * );
+ */
 export async function bridgeViaContract(
   sourceAddress: string,
   cAddress: string,
@@ -351,6 +497,14 @@ export async function bridgeViaContract(
   return { hash: sendResult.hash, successful: true };
 }
 
+/**
+ * Constructs a Stellar Expert (or testnet equivalent) URL for a transaction, account, or contract.
+ *
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @param type - `"tx"`, `"account"`, or `"contract"`.
+ * @param id - The hash / address / contract ID to link to.
+ * @returns A fully-qualified URL string.
+ */
 export function getExplorerUrl(
   network: "PUBLIC" | "TESTNET",
   type: "tx" | "account" | "contract",
@@ -359,6 +513,11 @@ export function getExplorerUrl(
   return `${EXPLORER_BASE_URLS[network]}/${type}/${id}`;
 }
 
+/**
+ * Returns the minimum XLM balance required to keep a Stellar account open.
+ *
+ * @returns The minimum balance as a decimal string (e.g. `"1.0"`).
+ */
 export function getAccountMinimumBalance(): string {
   return ACCOUNT_MIN_BALANCE;
 }
@@ -368,6 +527,14 @@ export interface AccountInfo {
   balances: { asset: string; amount: string }[];
 }
 
+/**
+ * Loads existence and balance information for any Stellar address.
+ *
+ * @param address - G- or C-address to query.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns `{ exists: false, balances: [] }` for unfunded accounts (404), otherwise account data.
+ * @throws For network errors other than 404.
+ */
 export async function loadAccountInfo(
   address: string,
   network: "PUBLIC" | "TESTNET"
@@ -389,6 +556,13 @@ export async function loadAccountInfo(
   }
 }
 
+/**
+ * Returns `true` if the account already has a trustline for the given asset code.
+ *
+ * @param address - G-address to check.
+ * @param assetCode - Asset code to look up (e.g. `"USDC"`).
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ */
 export async function hasTrustline(
   address: string,
   assetCode: string,
@@ -398,10 +572,27 @@ export async function hasTrustline(
   return info.balances.some((b) => b.asset === assetCode);
 }
 
+/**
+ * Creates a `changeTrust` Stellar operation to add or remove an asset trustline.
+ *
+ * @param assetCode - Asset code (e.g. `"USDC"`).
+ * @param issuer - Issuer G-address of the asset.
+ * @returns A Stellar SDK `Operation` ready to be added to a {@link TransactionBuilder}.
+ */
 export function changeTrustOperation(assetCode: string, issuer: string) {
   return Operation.changeTrust({ asset: new Asset(assetCode, issuer) });
 }
 
+/**
+ * Builds, signs, and submits a `changeTrust` transaction to establish an asset trustline.
+ *
+ * @param sourceAddress - G-address of the account establishing the trustline.
+ * @param assetCode - Asset code (e.g. `"USDC"`).
+ * @param issuer - Issuer G-address.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns A {@link PaymentResult} confirming the trustline transaction.
+ * @throws If signing is rejected or submission fails.
+ */
 export async function buildAndSubmitChangeTrust(
   sourceAddress: string,
   assetCode: string,
@@ -430,6 +621,14 @@ export async function buildAndSubmitChangeTrust(
   return { hash: result.hash, successful: result.successful };
 }
 
+/**
+ * Queries Horizon for the status of a submitted transaction.
+ *
+ * @param hash - Transaction hash (64-char hex string).
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns `"confirmed"` if successful, `"failed"` if found but unsuccessful, `"pending"` if not yet indexed.
+ * @throws For network errors other than 404.
+ */
 export async function getTransactionStatus(
   hash: string,
   network: "PUBLIC" | "TESTNET"
@@ -447,6 +646,11 @@ export async function getTransactionStatus(
   }
 }
 
+/**
+ * Returns `true` if the given asset code represents the native XLM asset.
+ *
+ * @param assetCode - Asset code string to check.
+ */
 export function isNativeAsset(assetCode: string): boolean {
   return assetCode === "XLM";
 }
@@ -476,6 +680,14 @@ async function simulateContractRead(
   return (sim as rpc.Api.SimulateTransactionSuccessResponse).result?.retval ?? null;
 }
 
+/**
+ * Reads the SEP-41 token balance for an account from a Soroban contract via simulation.
+ *
+ * @param contractId - C-address of the SEP-41 token contract.
+ * @param accountId - G- or C-address of the account to query.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns The raw balance as a `bigint` (unscaled). Returns `0n` on any error.
+ */
 export async function getSorobanTokenBalance(
   contractId: string,
   accountId: string,
@@ -490,6 +702,13 @@ export async function getSorobanTokenBalance(
   }
 }
 
+/**
+ * Reads the token symbol from a SEP-41 contract via simulation.
+ *
+ * @param contractId - C-address of the token contract.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns The symbol string (e.g. `"USDC"`), or the first 8 chars of `contractId` on failure.
+ */
 export async function getTokenSymbol(
   contractId: string,
   network: "PUBLIC" | "TESTNET"
@@ -503,6 +722,13 @@ export async function getTokenSymbol(
   }
 }
 
+/**
+ * Reads the decimal precision from a SEP-41 token contract via simulation.
+ *
+ * @param contractId - C-address of the token contract.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns The number of decimal places (e.g. `7`). Defaults to `7` on failure.
+ */
 export async function getTokenDecimals(
   contractId: string,
   network: "PUBLIC" | "TESTNET"
@@ -516,6 +742,16 @@ export async function getTokenDecimals(
   }
 }
 
+/**
+ * Reads balances for multiple SEP-41 tokens held by a Soroban C-address.
+ *
+ * Each token's raw balance is divided by `10^decimals` to produce a human-readable amount.
+ *
+ * @param cAddress - The Soroban C-address to query.
+ * @param tokenContractIds - Array of SEP-41 token contract C-addresses.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns An {@link AccountBalances} with XLM total and per-token balance entries.
+ */
 export async function getSorobanAccountBalances(
   cAddress: string,
   tokenContractIds: string[],
@@ -547,6 +783,16 @@ function addressToScVal(address: string) {
   return nativeToScVal(Address.contract(StrKey.decodeContract(address)), { type: "address" });
 }
 
+/**
+ * Queries the current token allowance granted by `owner` to `spender` from a SEP-41 contract.
+ *
+ * @param tokenContractId - C-address of the SEP-41 token contract.
+ * @param owner - G- or C-address of the token owner.
+ * @param spender - G- or C-address of the approved spender.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns The allowance as a `bigint` (raw, unscaled).
+ * @throws If the Soroban simulation fails.
+ */
 export async function getTokenAllowance(
   tokenContractId: string,
   owner: string,
@@ -572,6 +818,19 @@ export async function getTokenAllowance(
   return BigInt(scValToNative(result.retval) as bigint);
 }
 
+/**
+ * Submits a SEP-41 `approve` transaction, granting `spender` permission to spend `amount` tokens.
+ *
+ * The approval expires after approximately 30 days (~535,680 ledgers at 5 s/ledger).
+ *
+ * @param tokenContractId - C-address of the SEP-41 token contract.
+ * @param owner - G-address of the token owner (must be the Freighter-connected account).
+ * @param spender - G- or C-address of the approved spender.
+ * @param amount - Raw (unscaled) allowance amount as a `bigint`.
+ * @param network - `"PUBLIC"` or `"TESTNET"`.
+ * @returns The transaction hash string on success.
+ * @throws If simulation, signing, or submission fails.
+ */
 export async function approveToken(
   tokenContractId: string,
   owner: string,
