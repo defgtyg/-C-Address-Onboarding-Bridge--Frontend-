@@ -8,6 +8,7 @@ import {
 import { useWallet } from "@/components/wallet-provider";
 import { ToastContainer, useToast } from "@/components/toast";
 import { useFormHistory, type FormState } from "@/hooks/useFormHistory";
+import { useMultiStepForm } from "@/hooks/useMultiStepForm";
 import { getBridgeContractId, NETWORK_CONFIG_ERRORS } from "@/config/networks";
 import {
   isValidStellarAddress,
@@ -49,7 +50,6 @@ import {
   USDC_ISSUERS,
 } from "@/lib/constants";
 
-type Step = "form" | "review" | "simulate" | "confirm";
 type TxStatus = "idle" | "signing" | "submitting" | "success" | "error";
 type PollStatus = "pending" | "confirmed" | "failed" | null;
 
@@ -279,7 +279,7 @@ export default function BridgePage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [step, canProceed]);
+  }, [step, canProceed, setStep]);
 
   // --- Helpers ---
 
