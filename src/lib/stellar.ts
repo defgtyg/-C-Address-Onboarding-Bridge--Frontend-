@@ -52,7 +52,181 @@ import {
 export type { BridgeTransaction as BridgeTransactionData } from "./types";
 export type { PaymentResult, AccountBalances } from "./types";
 
-export function getHorizonServer(network: "PUBLIC" | "TESTNET"): Horizon.Server {
+export interface BridgeBatchEntry {
+  destination: string;
+  amount: string;
+}
+
+export async function buildBatchBridgeTransaction(
+  sourceAddress: string,
+  entries: BridgeBatchEntry[],
+  assetCode: string,
+  network: "PUBLIC" | "TESTNET",
+  feeStroop: string = BASE_FEE,
+) {
+  if (entries.length === 0) {
+    throw new Error("No batch entries provided");
+  }
+
+  const server = getHorizonServer(network);
+  const passphrase = getNetworkPassphrase(network);
+  const account = await server.loadAccount(sourceAddress);
+  const useContract = Boolean(BRIDGE_CONTRACT_ID);
+
+  const builder = new TransactionBuilder(account, {
+    fee: feeStroop,
+    networkPassphrase: passphrase,
+  });
+
+  let asset: Asset;
+  if (useContract || assetCode === "XLM") {
+    asset = Asset.native();
+  } else {
+    const balances = account.balances as HorizonBalance[];
+    const matchingBalance = balances.find((b) => b.asset_code === assetCode);
+    if (!matchingBalance) {
+      throw new Error(`No ${assetCode} trustline found for this account`);
+    }
+    asset = new Asset(assetCode, matchingBalance.asset_issuer);
+  }
+
+  for (const entry of entries) {
+    builder.addOperation(
+      Operation.payment({
+        destination: useContract ? BRIDGE_CONTRACT_ID : entry.destination,
+        asset,
+        amount: entry.amount,
+      }),
+    );
+  }
+
+  return builder.setTimeout(STELLAR_TX_TIMEOUT_SECONDS).build();
+}
+
+export async function submitBatchBridgeTransaction(
+  sourceAddress: string,
+  entries: BridgeBatchEntry[],
+  assetCode: string,
+  network: "PUBLIC" | "TESTNET",
+  feeStroops?: string,
+): Promise<PaymentResult> {
+  if (entries.length === 0) {
+    throw new Error("No batch entries provided");
+  }
+
+  const useContract = Boolean(BRIDGE_CONTRACT_ID);
+  if (!useContract) {
+    const server = getHorizonServer(network);
+    const passphrase = getNetworkPassphrase(network);
+    const account = await server.loadAccount(sourceAddress);
+
+    let asset: Asset;
+    if (assetCode === "XLM") {
+      asset = Asset.native();
+    } else {
+      const balances = account.balances as HorizonBalance[];
+      const matchingBalance = balances.find((b) => b.asset_code === assetCode);
+      if (!matchingBalance) {
+        throw new Error(`No ${assetCode} trustline found for this account`);
+      }
+      asset = new Asset(assetCode, matchingBalance.asset_issuer);
+    }
+
+    const tx = new TransactionBuilder(account, {
+      fee: feeStroops ?? BASE_FEE,
+      networkPassphrase: passphrase,
+    })
+      .setTimeout(STELLAR_TX_TIMEOUT_SECONDS);
+
+    for (const entry of entries) {
+      tx.addOperation(
+        Operation.payment({
+          destination: entry.destination,
+          asset,
+          amount: entry.amount,
+        }),
+      );
+    }
+
+    const txBuilt = tx.build();
+    const signedResult = await signTransaction(txBuilt.toXDR(), {
+      networkPassphrase: passphrase,
+    });
+
+    if ("error" in signedResult && signedResult.error) {
+      throw new Error(`Signing failed: ${signedResult.error}`);
+    }
+
+    const signedXDR = (signedResult as { signedTxXdr: string }).signedTxXdr;
+    const signedTx = TransactionBuilder.fromXDR(signedXDR, passphrase);
+    const result = await server.submitTransaction(signedTx);
+
+    return {
+      hash: result.hash,
+      successful: result.successful,
+    };
+  }
+
+  const server = getSorobanRpcServer(network);
+  const passphrase = getNetworkPassphrase(network);
+
+  let account;
+  try {
+    account = await server.getAccount(sourceAddress);
+  } catch (e) {
+    throw new Error(`Failed to load account ${sourceAddress}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  const tx = new TransactionBuilder(account, {
+    fee: feeStroops ?? BASE_FEE,
+    networkPassphrase: passphrase,
+  });
+
+  for (const entry of entries) {
+    tx.addOperation(
+      Operation.payment({
+        destination: BRIDGE_CONTRACT_ID,
+        asset: Asset.native(),
+        amount: entry.amount,
+      }),
+    );
+  }
+
+  const prepared = await server.prepareTransaction(tx.build());
+  const signedResult = await signTransaction(prepared.toXDR(), { networkPassphrase: passphrase });
+  if ("error" in signedResult && signedResult.error) {
+    throw new Error(`Signing failed: ${signedResult.error}`);
+  }
+
+  const signedXDR = (signedResult as { signedTxXdr: string }).signedTxXdr;
+  const signedTx = TransactionBuilder.fromXDR(signedXDR, passphrase);
+  const sendResult = await server.sendTransaction(signedTx);
+
+  if (sendResult.status === "ERROR") {
+    throw new Error(
+      `Contract invocation failed: ${JSON.stringify(sendResult.errorResult)}`,
+    );
+  }
+
+  let polled;
+  try {
+    polled = await server.pollTransaction(sendResult.hash, {
+      attempts: 20,
+      sleepStrategy: rpc.BasicSleepStrategy,
+    });
+  } catch (e) {
+    throw new Error(`Polling failed for tx ${sendResult.hash}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  if (polled.status !== "SUCCESS") {
+    throw new Error(`Bridge contract call did not succeed (status: ${polled.status})`);
+  }
+
+  return { hash: sendResult.hash, successful: true };
+}
+
+export function getExplorerUrl(
+  network: "PUBLIC" | "TESTNET",
   return new Horizon.Server(HORIZON_URL[network]);
 }
 
