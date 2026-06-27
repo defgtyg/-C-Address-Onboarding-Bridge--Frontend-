@@ -1,18 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Wallet,
-  ArrowLeftRight,
-  CreditCard,
-  Building2,
-  Copy,
-  Check,
-  ExternalLink,
-  Plus,
-  Loader2,
-  Radio,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Wallet, ArrowLeftRight, CreditCard, Building2, Copy, Check, ExternalLink, Plus } from "lucide-react";
+import { Skeleton } from "@/components/skeleton";
 import { useWallet } from "@/components/wallet-provider";
 import TransactionHistory from "@/components/transaction-history";
 import Link from "next/link";
@@ -161,9 +151,9 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
           <div className="text-xs text-[var(--text-muted)] mb-1">{ASSET_XLM} Balance</div>
           {loading ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--text-muted)]" aria-hidden="true" />
-              <span className="text-xs text-[var(--text-muted)]">Loading...</span>
+            <div className="space-y-2 mt-1">
+              <Skeleton className="h-8 w-28" />
+              <Skeleton className="h-3 w-8" />
             </div>
           ) : (
             <>
@@ -178,9 +168,9 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 card-entrance">
           <div className="text-xs text-[var(--text-muted)] mb-1">Transactions</div>
           {loading ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--text-muted)]" aria-hidden="true" />
-              <span className="text-xs text-[var(--text-muted)]">Loading...</span>
+            <div className="space-y-2 mt-1">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-3 w-28" />
             </div>
           ) : (
             <>
