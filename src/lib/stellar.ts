@@ -113,6 +113,12 @@ export function isCAddress(address: string): boolean {
   return address.startsWith("C") && address.length === STELLAR_ADDRESS_LENGTH;
 }
 
+export function getSep0007Uri(address: string): string {
+  const uri = new URL("web+stellar:pay");
+  uri.searchParams.set("destination", address);
+  return uri.toString();
+}
+
 export function isGAddress(address: string): boolean {
   return address.startsWith("G") && address.length === STELLAR_ADDRESS_LENGTH;
 }
